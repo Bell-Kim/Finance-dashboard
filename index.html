@@ -606,7 +606,7 @@ function renderAll(){
         const collapsed = !!collapsedGroups[cat.name];
         const gmom = last(cat.total) - cat.total[5];
         const gpct = cat.total[5] ? (gmom/cat.total[5]*100) : 0;
-        const gcells = cat.total.map((v,i) => `<td style="background:${bgTint(cat.total,i,cat.name==='지급임차료')}">${fmt(v)}</td>`).join('');
+        const gcells = cat.total.map((v) => `<td>${fmt(v)}</td>`).join('');
         const gmomClass = gmom>0 ? 'mom-up' : (gmom<0 ? 'mom-down':'');
         const garrow = gmom>0 ? '▲' : (gmom<0 ? '▼' : '–');
         html += `<tr class="group-row" data-cat="${cat.name}">
