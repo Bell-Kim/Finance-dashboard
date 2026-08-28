@@ -568,14 +568,7 @@ function renderAll(){
     if(p===0 && c>0) return 'rgba(255,92,92,0.28)';
     if(p>0 && c===0) return 'rgba(52,199,160,0.28)';
     if(diff<=0 || Math.abs(diff)<=30000) return 'transparent';
-    const increases = [];
-    for(let j=1;j<vals.length;j++){
-      const d = vals[j]-vals[j-1];
-      if(d>30000 && vals[j-1]>0) increases.push(d);
-    }
-    const maxIncrease = increases.length ? Math.max(...increases) : diff;
-    const ratio = Math.max(0, Math.min(1, diff/maxIncrease));
-    return `rgba(255,92,92,${(0.12+ratio*0.24).toFixed(2)})`;
+    return 'rgba(255,92,92,0.28)';
   }
   function sortRows(rows){
     rows.sort((a,b) => {
