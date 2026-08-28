@@ -562,11 +562,17 @@ function renderAll(){
     });
   }
   function bgTint(vals, i, skip){
-    if(skip || i===0) return 'transparent';
-    const p = vals[i-1], c = vals[i];
-    const diff = c - p;
-    if(p===0 && c>0) return 'rgba(255,92,92,0.28)';
-    if(p>0 && c===0) return 'rgba(52,199,160,0.28)';
+    if(skip) return 'transparent';
+    const v = vals[i];
+    if(v === 0){
+      if(i>0 && vals[i-1]>0) return 'rgba(52,199,160,0.28)';      // 이전 달이 +였다가 여기서 0이 됨
+      if(i<vals.length-1 && vals[i+1]>0) return 'rgba(255,92,92,0.28)'; // 여기는 0인데 다음 달에 +로 늘어남
+      return 'transparent';
+    }
+    if(i===0) return 'transparent';
+    const p = vals[i-1];
+    if(p===0) return 'transparent'; // 이 전이는 이전(0) 칸에서 이미 표시됨
+    const diff = v - p;
     if(diff<=0 || Math.abs(diff)<=30000) return 'transparent';
     return 'rgba(255,92,92,0.28)';
   }
