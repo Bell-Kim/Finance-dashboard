@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>엔코 · 재무 현황 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#F5F6F8; --panel:#FFFFFF; --panel2:#EEF1F5; --hair:rgba(20,30,50,.10);
+    --text:#1B2333; --dim:#6B7480; --amber:#B8790A; --amber-dim:rgba(184,121,10,.10);
+    --mint:#1E8F6F; --coral:#D6483F;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:Verdana, sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono{ font-family:Verdana, sans-serif; }
+  .wrap{ max-width:1520px; margin:0 auto; padding:30px 28px 90px; }
+  header{ display:flex; justify-content:space-between; align-items:flex-end; padding-bottom:20px; margin-bottom:26px; border-bottom:1px solid var(--hair); flex-wrap:wrap; gap:14px;}
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--mint); box-shadow:0 0 0 0 rgba(52,199,160,.6); animation:pulse 2s infinite; margin-right:5px; vertical-align:middle;}
+  .dot.off{ background:var(--coral); animation:none; }
+  @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(52,199,160,.55);} 70%{box-shadow:0 0 0 8px rgba(52,199,160,0);} 100%{box-shadow:0 0 0 0 rgba(52,199,160,0);} }
+  .wordmark{ font-family:Verdana, sans-serif; font-weight:700; font-size:13px; letter-spacing:.22em; color:var(--dim); text-transform:uppercase;}
+  .logo-img{ height:22px; width:auto; }
+  h1{ font-family:Verdana, sans-serif; font-size:26px; font-weight:800; margin:6px 0 4px; letter-spacing:-.01em; color:var(--text);}
+  .sub{ font-size:12.5px; color:var(--dim); }
+  .status{ text-align:right; }
+  .status .badge{ font-family:Verdana, sans-serif; font-size:11px; color:var(--amber); border:1px solid rgba(184,121,10,.35); background:var(--amber-dim); padding:4px 10px; border-radius:3px; letter-spacing:.06em; cursor:pointer;}
+  .status .ts{ font-size:11px; color:var(--dim); margin-top:6px; font-family:Verdana, sans-serif;}
+  .kpis{ display:grid; grid-template-columns:repeat(5,1fr); gap:1px; background:var(--hair); border:1px solid var(--hair); margin-bottom:34px;}
+  .kpi{ background:var(--panel); padding:18px 20px; position:relative; overflow:hidden;}
+  .kpi::before{ content:""; position:absolute; top:0; left:0; right:0; height:2px; background:var(--amber); opacity:.7;}
+  .kpi .lbl{ font-family:Verdana, sans-serif; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin-bottom:12px; display:flex; align-items:center; gap:5px;}
+  .info-icon{ cursor:pointer; color:var(--dim); font-size:10px; width:14px; height:14px; border:1px solid var(--dim); border-radius:50%; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; font-family:Verdana, sans-serif; text-transform:none; letter-spacing:0;}
+  .info-icon:hover{ color:var(--amber); border-color:var(--amber);}
+  .tooltip-pop{ position:fixed; max-width:280px; background:#FFFFFF; border:1px solid var(--hair); padding:12px 14px; font-size:11.5px; line-height:1.6; color:var(--text); border-radius:4px; z-index:200; box-shadow:0 8px 24px rgba(20,30,50,.18); display:none; font-family:Verdana, sans-serif;}
+  .tooltip-pop b{ color:var(--amber); }
+  .kpi .val{ font-family:Verdana, sans-serif; font-size:30px; font-weight:700; color:var(--amber); font-variant-numeric:tabular-nums; line-height:1;}
+  .kpi .unit{ font-size:11px; color:var(--dim); margin-left:4px; font-weight:400;}
+  .kpi .delta{ margin-top:12px; font-size:11.5px; font-family:Verdana, sans-serif; font-weight:600;}
+  .kpi .extra{ margin-top:4px; font-size:10.5px; font-family:Verdana, sans-serif; color:var(--dim);}
+  .delta.up{ color:var(--coral); } .delta.down{ color:var(--mint); } .delta.warn{ color:var(--coral); }
+  .sec-head{ display:flex; align-items:center; gap:10px; margin-bottom:16px;}
+  .sec-idx{ font-family:Verdana, sans-serif; font-size:11px; color:var(--amber); border:1px solid rgba(184,121,10,.30); padding:1px 7px; border-radius:3px;}
+  .sec-title{ font-size:16px; font-weight:700; color:var(--text);}
+  .unit-badge{ margin-left:auto; font-family:Verdana, sans-serif; font-size:10.5px; color:var(--dim); border:1px solid var(--hair); background:var(--panel); padding:3px 9px; border-radius:3px;}
+  .alert-banner{ background:rgba(255,92,92,.10); border:1px solid rgba(255,92,92,.4); border-left:4px solid var(--coral); padding:12px 16px; margin-bottom:22px; border-radius:3px;}
+  .alert-banner .title{ font-family:Verdana, sans-serif; font-size:11px; font-weight:700; color:var(--coral); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;}
+  .alert-banner ul{ margin:0; padding-left:18px;}
+  .alert-banner li{ font-size:12.5px; color:var(--text); line-height:1.7;}
+  .note{ font-size:11px; color:var(--dim); margin:6px 0 18px;}
+  section{ margin-bottom:40px; }
+  .charts-row{ display:grid; grid-template-columns:1.2fr 1fr; gap:1px; background:var(--hair); border:1px solid var(--hair);}
+  .chart-card{ background:var(--panel); padding:18px 18px 8px;}
+  .chart-card h3{ font-family:Verdana, sans-serif; font-size:11px; letter-spacing:.05em; font-weight:600; margin:0 0 14px; color:var(--dim); text-transform:uppercase;}
+  .tabs{ display:flex; gap:22px; margin-bottom:20px; border-bottom:1px solid var(--hair);}
+  .tab-btn{ font-family:Verdana, sans-serif; font-size:12.5px; font-weight:600; letter-spacing:.03em; background:none; border:none; padding:9px 0; cursor:pointer; color:var(--dim); border-bottom:2px solid transparent; text-transform:uppercase;}
+  .tab-btn.active{ color:var(--amber); border-bottom-color:var(--amber);}
+  .tab-btn.active.ew{ color:#F5D949; border-bottom-color:#F5D949;}
+  .tab-btn.active.ep{ color:#FF5C5C; border-bottom-color:#FF5C5C;}
+  .entity-top{ display:grid; grid-template-columns:1fr 420px; gap:1px; background:var(--hair); border:1px solid var(--hair); margin-bottom:1px;}
+  .controls-card{ background:var(--panel); padding:16px 18px;}
+  .donut-card{ background:var(--panel); padding:16px 20px; display:flex; align-items:center; gap:22px;}
+  .donut-card .donut-wrap{ width:140px; height:140px; flex-shrink:0; }
+  .donut-card h3{ font-size:10.5px; color:var(--dim); text-transform:uppercase; margin:0 0 8px; letter-spacing:.05em;}
+  .legend{ flex:1; }
+  .legend div{ display:flex; justify-content:space-between; padding:2px 0; font-size:10.5px;}
+  .legend .name{ display:flex; align-items:center; gap:6px; color:var(--text);}
+  .legend .pct{ font-family:Verdana, sans-serif; color:var(--dim);}
+  .sw{ width:7px; height:7px; border-radius:2px; display:inline-block; flex-shrink:0;}
+  .table-card{ background:var(--panel); padding:0; overflow:hidden;}
+  .controls{ display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+  .chip{ font-family:Verdana, sans-serif; font-size:10.5px; padding:5px 11px; border:1px solid var(--hair); background:var(--panel2); cursor:pointer; border-radius:3px; color:var(--dim); text-transform:uppercase; letter-spacing:.02em;}
+  .chip.active{ background:var(--amber-dim); color:var(--amber); border-color:rgba(184,121,10,.4);}
+  .search{ margin-left:auto; font-family:Verdana, sans-serif; font-size:12px; padding:6px 10px; border:1px solid var(--hair); background:var(--panel2); color:var(--text); width:170px; border-radius:3px;}
+  .search::placeholder{ color:var(--dim); }
+  .tablewrap{ overflow-x:auto; overflow-y:auto; max-height:700px; padding:0 18px 18px; }
+  table{ width:100%; border-collapse:collapse; font-size:12px;}
+  thead th{ position:sticky; top:0; background:#F9FAFC; text-align:right; font-size:10.5px; color:var(--dim); font-weight:600;
+    padding:9px 8px; border-bottom:1px solid var(--hair); cursor:pointer; white-space:nowrap; text-transform:none; z-index:2;}
+  thead th:first-child, thead th:nth-child(2){ text-align:left; cursor:default;}
+  thead th.sortable:hover{ color:var(--amber);}
+  tbody td{ padding:7px 8px; border-bottom:1px solid var(--hair); text-align:right; font-family:Verdana, sans-serif;
+    font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--text);}
+  tbody td:first-child{ text-align:left;}
+  .vendor, .name-cell, .cat-name-cell{ text-align:left !important; font-family:Verdana, sans-serif; white-space:normal;}
+  tbody td.vendor{ color:var(--text); font-size:12px;}
+  tbody td.name-cell{ color:var(--dim); font-size:11px;}
+  tbody tr:hover td{ background:var(--panel2);}
+  td.mom-up{ color:var(--coral); }
+  td.mom-down{ color:var(--mint); }
+  td.summary-col{ border-left:2px solid var(--hair); background:rgba(255,255,255,.02);}
+  td.summary-col .amt{ font-weight:700; }
+  td.summary-col .pct{ display:block; font-size:9.5px; opacity:.75; margin-top:1px;}
+  th.summary-col{ border-left:2px solid var(--hair);}
+  td.total-col{ border-left:2px solid var(--hair); background:rgba(184,121,10,.07); font-weight:700; color:var(--amber);}
+  th.total-col{ border-left:2px solid var(--hair);}
+  tr.group-row{ cursor:pointer; background:var(--panel2); }
+  tr.group-row td{ font-weight:700; color:var(--text); border-bottom:1px solid rgba(255,255,255,.12); }
+  tr.group-row:hover td{ background:#E4E9F0; }
+  .ent-tag{ font-size:9.5px; padding:1px 6px; border-radius:8px; margin-left:6px; font-family:Verdana, sans-serif; font-weight:800; vertical-align:middle;}
+  .ent-tag.ew{ background:#F5D949; color:#2A2200;}
+  .ent-tag.ep{ background:#FF5C5C; color:#2A0000;}
+  .cat-tag{ display:inline-block; font-size:9px; padding:1px 6px; border-radius:8px; background:rgba(52,199,160,.14); color:var(--mint); font-family:Verdana, sans-serif; margin-right:3px;}
+  .chev{ display:inline-block; width:14px; color:var(--amber); font-family:Verdana, sans-serif;}
+  tr.item-row.collapsed{ display:none; }
+  .cash-card{ background:var(--panel); border:1px solid var(--hair); padding:16px 18px; margin-bottom:1px; display:grid; grid-template-columns:1fr 220px; gap:18px; align-items:center;}
+  .cash-card h3{ font-size:10.5px; color:var(--dim); text-transform:uppercase; margin:0 0 8px; letter-spacing:.05em;}
+  .cash-card .runway-box{ text-align:left; border-left:1px solid var(--hair); padding-left:18px;}
+  .cash-card .runway-val{ font-family:Verdana, sans-serif; font-size:24px; font-weight:700; color:var(--amber); line-height:1;}
+  .cash-card .runway-lbl{ font-size:10.5px; color:var(--dim); margin-top:6px; text-transform:uppercase; letter-spacing:.05em;}
+  .cash-card .runway-note{ font-size:10.5px; color:var(--dim); margin-top:10px; line-height:1.5;}
+  footer{ margin-top:44px; padding-top:16px; border-top:1px solid var(--hair); font-size:10.5px; color:var(--dim); text-align:center; font-family:Verdana, sans-serif;}
+  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:50;}
+  .modal{ background:var(--panel); border:1px solid var(--hair); padding:28px; width:460px; max-width:90vw;}
+  .modal h2{ font-family:Verdana, sans-serif; font-size:15px; margin:0 0 6px; color:var(--amber);}
+  .modal p{ font-size:12px; color:var(--dim); line-height:1.6; margin:0 0 16px;}
+  .modal label{ font-family:Verdana, sans-serif; font-size:10.5px; color:var(--dim); text-transform:uppercase; display:block; margin-bottom:5px;}
+  .modal input{ width:100%; padding:9px 10px; background:var(--panel2); border:1px solid var(--hair); color:var(--text); font-family:Verdana, sans-serif; font-size:12px; margin-bottom:14px; border-radius:3px;}
+  .modal button{ font-family:Verdana, sans-serif; font-size:12px; font-weight:700; background:var(--amber); color:#FFFFFF; border:none; padding:10px 18px; border-radius:3px; cursor:pointer; letter-spacing:.03em;}
+  .modal .err{ color:var(--coral); font-size:11.5px; margin-bottom:10px; display:none;}
+  .modal .linkbtn{ background:none; color:var(--dim); text-decoration:underline; padding:0; margin-left:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand"><img src="data:image/png;base64,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" alt="enkostay" class="logo-img"></div>
+      <h1>재무 현황 대시보드</h1>
+      <div class="sub">엔코위더스 · 엔코플렉스 통합 경영 모니터링 · 원본 결산 시트 실시간 연동</div>
+    </div>
+    <div class="status">
+      <div class="badge" id="configBtn">⚙ 데이터 연결 설정</div>
+      <div class="ts"><span class="dot off" id="liveDot"></span><span id="tsBox">연결 대기 중</span></div>
+    </div>
+  </header>
+
+  <div id="content" style="display:none;">
+    <div class="tabs" id="viewTabs"></div>
+    <div id="alertBanner"></div>
+    <section class="kpis" id="kpiRow"></section>
+    <section>
+      <div class="sec-head"><span class="sec-idx">01</span><span class="sec-title">손익 · 현금 추이</span>
+        <span class="info-icon" data-info="매출액%2F%EC%98%81%EC%97%85%EC%9D%B4%EC%9D%B5%EC%9D%80%20PL_%ED%86%B5%ED%95%A9%2C%20%ED%98%84%EA%B8%88%EC%9E%94%EC%95%A1%EC%9D%80%20%EB%B3%B4%ED%86%B5%EC%98%88%EA%B8%88%2B%EC%A0%95%EA%B8%B0%EC%98%88%EC%A0%81%EA%B8%88(BS)%20%EA%B8%B0%EC%A4%80%EC%9C%BC%EB%A1%9C%20%EA%B3%84%EC%82%B0%EB%90%9C%20%EA%B0%92%EC%9D%B4%EC%97%90%EC%9A%94.">i</span>
+        <span class="unit-badge">단위: 백만원</span>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card"><h3>매출 대비 영업이익</h3><canvas id="chartPL" height="120"></canvas></div>
+        <div class="chart-card"><h3>현금잔액 추이 (즉시 가용잔액)</h3><canvas id="chartCash" height="120"></canvas>
+        </div>
+      </div>
+    </section>
+    <section>
+      <div class="sec-head"><span class="sec-idx">02</span><span class="sec-title">고정판관비 · 거래처별 상세</span>
+        <span class="info-icon" data-info="%EA%B3%84%EC%A0%95%EA%B3%BC%EB%AA%A9%20%ED%96%89%EC%9D%84%20%ED%81%B4%EB%A6%AD%ED%95%98%EB%A9%B4%20%ED%8E%BC%EC%B9%98%EA%B8%B0%2F%EC%A0%91%EA%B8%B0%EA%B0%80%20%EB%8F%BC%EC%9A%94.%3Cbr%3E%EC%B9%B4%ED%85%8C%EA%B3%A0%EB%A6%AC%20%EC%B9%A9%EC%9D%84%20%EA%B3%A0%EB%A5%B4%EA%B1%B0%EB%82%98%20%EA%B2%80%EC%83%89%ED%95%98%EB%A9%B4%20%ED%95%B4%EB%8B%B9%20%ED%95%AD%EB%AA%A9%EB%A7%8C%20%EB%AA%A8%EC%95%84%EC%84%9C%20%EB%B3%B4%EC%97%AC%EB%93%9C%EB%A0%A4%EC%9A%94.%3Cbr%3E%EC%85%80%20%EC%9D%8C%EC%98%81%EC%9D%80%20%EC%A0%84%EC%9B%94%EB%8C%80%EB%B9%84%203%EB%A7%8C%EC%9B%90%EC%9D%84%20%EB%84%98%EA%B2%8C%20%EC%A6%9D%EA%B0%80%ED%95%9C%20%EB%8B%AC%EB%A7%8C%20%EC%A7%84%ED%95%98%EA%B2%8C%20%ED%91%9C%EC%8B%9C%EB%8F%BC%EC%9A%94.%200%EC%9B%90%EC%97%90%EC%84%9C%20%EB%B9%84%EC%9A%A9%EC%9D%B4%20%EC%83%88%EB%A1%9C%20%EC%83%9D%EA%B8%B0%EA%B1%B0%EB%82%98%2C%20%EB%B0%98%EB%8C%80%EB%A1%9C%200%EC%9B%90%EC%9D%B4%20%EB%90%9C%20%EB%8B%AC%EC%9D%80%20%EA%B8%88%EC%95%A1%EA%B3%BC%20%EC%83%81%EA%B4%80%EC%97%86%EC%9D%B4%20%ED%91%9C%EC%8B%9C%EB%8F%BC%EC%9A%94.%3Cbr%3E%3Cbr%3E%EC%A7%80%EA%B8%89%EC%9E%84%EC%B0%A8%EB%A3%8C%EB%8A%94%20%EC%97%B0%20%EC%9E%84%EB%8C%80%EB%A3%8C%EB%A5%BC%20%EB%A7%A4%EB%8B%AC%20%EC%9D%BC%ED%95%A0%EA%B3%84%EC%82%B0%ED%95%B4%EC%84%9C%20%EC%9D%B8%EC%8B%9D%ED%95%98%EB%8A%94%20%ED%8A%B9%EC%84%B1%EC%83%81%20%EA%B8%88%EC%95%A1%EC%9D%B4%20%EB%93%A4%EC%91%A5%EB%82%A0%EC%91%A5%ED%95%B4%EC%84%9C%2C%20%EC%9D%B4%20%ED%95%AD%EB%AA%A9%EC%9D%80%20%EC%9D%8C%EC%98%81%20%ED%91%9C%EC%8B%9C%EC%97%90%EC%84%9C%20%EC%A0%9C%EC%99%B8%ED%96%88%EC%96%B4%EC%9A%94.">i</span>
+        <span class="unit-badge">단위: 원</span>
+      </div>
+      <div class="entity-top">
+        <div class="controls-card">
+          <div class="controls" id="chipBox"></div>
+        </div>
+        <div class="donut-card">
+          <div class="donut-wrap"><canvas id="chartDonut"></canvas></div>
+          <div>
+            <h3 id="donutTitle">비중</h3>
+            <div class="legend" id="legendBox"></div>
+          </div>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="tablewrap"><table><thead><tr id="tableHead"></tr></thead><tbody id="tableBody"></tbody></table></div>
+      </div>
+    </section>
+  </div>
+  <footer>엔코 파이낸스 · Bell &middot; 원본 결산 시트 실시간 연동</footer>
+</div>
+<div class="tooltip-pop" id="tooltipPop"></div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2>⚙ 데이터 연결 설정</h2>
+    <p>
+      기존 결산 엑셀을 그대로 옮긴 구글 시트를 연결합니다. 시트 공유 설정에서 "링크가 있는 모든 사용자 - 뷰어"로 설정한 뒤,
+      주소창의 스프레드시트 ID를 붙여넣어 주세요. <b>PL_통합, BS_Enkorwithus, BS_Enkoplex, 고정판관비_Enkorwithus, 고정판관비_enkoplex</b> 탭이
+      원본과 동일한 이름/구조로 있어야 해요. 별도 양식을 새로 만드실 필요 없습니다.
+    </p>
+    <div class="err" id="errBox"></div>
+    <label>구글 시트 ID</label>
+    <input id="sheetIdInput" placeholder="예: 1AbCDefGhIjkLmnOPQrstuVWxyz1234567890">
+    <button id="connectBtn">연결하기</button>
+    <button class="linkbtn" id="closeModal" style="display:none;">닫기</button>
+  </div>
+</div>
+
+<script>
+let SHEET_ID = localStorage.getItem('enkor_sheet_id_v2') || '';
+let DATA = null;
+let charts = {};
+let currentView = 'combined';
+let sortState = { key:'mom', dir:'desc', userSet:false };
+let activeCategory = '전체';
+let searchTerm = '';
+let collapsedGroups = {};
+
+function gvizUrl(id, sheetName){
+  return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+}
+async function fetchTab(id, sheetName){
+  const res = await fetch(gvizUrl(id, sheetName));
+  if(!res.ok) throw new Error('SHEET_FETCH_FAILED:' + sheetName);
+  const text = await res.text();
+  const start = text.indexOf('{'); const end = text.lastIndexOf('}');
+  const json = JSON.parse(text.substring(start, end+1));
+  return json.table.rows.map(r => (r.c||[]).map(c => c ? c.v : null));
+}
+const trim = v => (v===null||v===undefined) ? '' : String(v).trim();
+const num = v => (typeof v === 'number') ? v : (parseFloat(String(v||'0').replace(/,/g,'')) || 0);
+const isAllZero = vals => vals.every(v => !v);
+
+// -------- Parse PL_통합 (label in col B; each month has 3 cols: EW, EP, 통합 starting at idx4) --------
+// offset: 0=Enkorwithus, 1=Enkoplex, 2=연결기준(통합)
+function parsePL(rows, offset){
+  const monthCols = [0,1,2,3,4,5,6].map(m => 4 + 3*m + offset);
+  function findRow(label){ return rows.find(r => trim(r[1]) === label); }
+  const revRow = findRow('Ⅰ. 매출액');
+  const cogsRow = findRow('Ⅱ. 매출원가');
+  const grossRow = findRow('Ⅲ. 매출총이익');
+  const sgaRow = findRow('Ⅳ. 판매비와 관리비');
+  const opRow = findRow('Ⅴ. 영업이익');
+  const pick = (row) => monthCols.map(c => row ? num(row[c]) : 0);
+  return {
+    revenue: pick(revRow), cogs: pick(cogsRow), gross: pick(grossRow),
+    sga: pick(sgaRow), opinc: pick(opRow)
+  };
+}
+
+// -------- Parse 고정판관비 sheets --------
+// -------- 임시 패치: 고정판관비_enkoplex 탭의 1월 데이터가 gviz에서 계속 null로 오는 문제 대응 --------
+// 구글 드라이브 API로 직접 확인한 실제 시트 값(2026-08-28 기준)을 행 순서 기준으로 덮어씀.
+// gviz가 정상화되면(즉 실제로 값이 오면) 아래 patch는 자동으로 적용 안 됨(이미 값이 있으면 건드리지 않음).
+function patchEnkoplexJan(rows){
+  const known = [19783320,19783320,1580500,618630,81260,677610,114440,88560,30000,30000,1000000,1000000,140000,140000,0];
+  for(let i=0;i<known.length && i<rows.length;i++){
+    if(rows[i] && (rows[i][5]===null || rows[i][5]===undefined)){
+      rows[i] = rows[i].slice();
+      rows[i][5] = known[i];
+    }
+  }
+  return rows;
+}
+
+function parseOpex(rows){
+  const cats = [];
+  let cur = null;
+  for(const row of rows){
+    const b = trim(row[1]), c = trim(row[2]);
+    if(b === '계정별원장 rawdata' || b === '해당월') break;
+    if(b){
+      const name = b.startsWith('사회보험료') ? '사회보험료' : b;
+      cur = { name, total: row.slice(5,12).map(num), items: [] };
+      cats.push(cur);
+    } else if(c && cur){
+      const vendor = trim(row[4]) || null;
+      cur.items.push({ name: c, vendor, vals: row.slice(5,12).map(num) });
+    }
+  }
+  return cats.filter(c => c.items.length > 0 || c.total.some(v=>v!==0));
+}
+
+// -------- Merge two entities' opex categories into a 연결기준 view --------
+function mergeCategories(catsA, labelA, catsB, labelB){
+  const order = [];
+  const map = {};
+  const tag = (cat, label) => cat.items.map(it => ({...it, entity: label}));
+  [ {cats:catsA, label:labelA}, {cats:catsB, label:labelB} ].forEach(({cats,label}) => {
+    cats.forEach(cat => {
+      if(!map[cat.name]){ map[cat.name] = { name: cat.name, total:[0,0,0,0,0,0,0], items:[] }; order.push(cat.name); }
+      const m = map[cat.name];
+      cat.total.forEach((v,i)=> m.total[i]+=v);
+      m.items.push(...tag(cat, label));
+    });
+  });
+  return order.map(n=>map[n]);
+}
+const sumArr = (a,b) => a.map((v,i)=> v + (b[i]||0));
+function mergePL(a,b){
+  const out = {};
+  ['revenue','cogs','gross','sga','opinc'].forEach(k => out[k] = sumArr(a[k], b[k]));
+  return out;
+}
+
+// -------- Parse BS sheet cash position: 보통예금만 (지금 당장 쓸 수 있는 실제 가용잔액, 정기예·적금 제외) --------
+function parseBSCash(rows){
+  const monthIdx = [0,1,2,3,4,5,6].map(m => 3 + m); // colD(idx3)=01월 ... idx9=07월
+  function findRow(label){ return rows.find(r => trim(r[1]) === label); }
+  const dep = findRow('보통예금');
+  return monthIdx.map(c => dep ? num(dep[c]) : 0);
+}
+
+// -------- Parse BS sheet capital position: 자본금(Ⅰ.자본금) and 자본총계 for 자본잠식률 --------
+function parseBSCapital(rows){
+  const monthIdx = [0,1,2,3,4,5,6].map(m => 3 + m);
+  function findRow(label){ return rows.find(r => trim(r[1]) === label); }
+  const capRow = findRow('Ⅰ. 자본금');
+  const equityRow = findRow('자본총계');
+  return {
+    capital: monthIdx.map(c => capRow ? num(capRow[c]) : 0),
+    equity: monthIdx.map(c => equityRow ? num(equityRow[c]) : 0)
+  };
+}
+
+async function loadData(id){
+  const [plRows, ewRows, epRows, bsEwRows, bsEpRows] = await Promise.all([
+    fetchTab(id, 'PL_통합'),
+    fetchTab(id, '고정판관비_Enkorwithus'), fetchTab(id, '고정판관비_enkoplex'),
+    fetchTab(id, 'BS_Enkorwithus'), fetchTab(id, 'BS_Enkoplex')
+  ]);
+  const ewPL = parsePL(plRows, 0);
+  const epPL = parsePL(plRows, 1);
+  const ewCats = parseOpex(ewRows);
+  const epCats = parseOpex(patchEnkoplexJan(epRows));
+  const ewCash = parseBSCash(bsEwRows);
+  const epCash = parseBSCash(bsEpRows);
+  const ewCap = parseBSCapital(bsEwRows);
+  const epCap = parseBSCapital(bsEpRows);
+  return {
+    months: ['1월','2월','3월','4월','5월','6월','7월'],
+    entities: {
+      enkorwithus: { label:'엔코위더스', categories: ewCats, cash: ewCash, pl: ewPL, capital: ewCap },
+      enkoplex: { label:'엔코플렉스', categories: epCats, cash: epCash, pl: epPL, capital: epCap },
+      combined: { label:'연결기준', categories: mergeCategories(ewCats, '엔코위더스', epCats, '엔코플렉스'), cash: sumArr(ewCash, epCash), pl: mergePL(ewPL, epPL),
+        capital: { capital: sumArr(ewCap.capital, epCap.capital), equity: sumArr(ewCap.equity, epCap.equity) } },
+    }
+  };
+}
+
+const fmt = n => Math.round(n).toLocaleString('ko-KR');
+const fmtM = n => (n/1_000_000).toLocaleString('ko-KR', {maximumFractionDigits:1, minimumFractionDigits:1});
+const last = a => a[a.length-1], prev = a => a[a.length-2];
+
+function renderAll(){
+  Chart.defaults.font.family = "Verdana, sans-serif";
+  Chart.defaults.color = '#6B7480';
+
+  const PALETTE = ['#B8790A','#1E8F6F','#3D6A94','#D6483F','#8A5FB0','#6B7480','#A67C1E','#2E86AB'];
+
+  const viewTabs = document.getElementById('viewTabs');
+  viewTabs.innerHTML = '';
+  const entClass = { enkorwithus:'ew', enkoplex:'ep', combined:'' };
+  ['combined','enkorwithus','enkoplex'].forEach(key => {
+    const ent = DATA.entities[key];
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn ' + entClass[key] + (key===currentView?' active':'');
+    btn.textContent = ent.label;
+    btn.onclick = () => {
+      currentView = key; activeCategory='전체'; searchTerm=''; collapsedGroups={};
+      document.querySelectorAll('#viewTabs .tab-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
+      renderView();
+    };
+    viewTabs.appendChild(btn);
+  });
+
+  function entityImpairPct(entKey){
+    const e = DATA.entities[entKey];
+    const cap = last(e.capital.capital), eq = last(e.capital.equity);
+    if(cap<=0) return null;
+    return (cap-eq)/cap*100;
+  }
+
+  function renderAlertBanner(ent, key){
+    const flags = [];
+    if(last(ent.pl.opinc) < 0) flags.push(DATA.months[DATA.months.length-1]+' 기준 영업이익이 적자예요 (' + fmtM(last(ent.pl.opinc)) + '백만원).');
+    if(key==='combined'){
+      ['enkorwithus','enkoplex'].forEach(k => {
+        const pct = entityImpairPct(k);
+        if(pct !== null && pct >= 100) flags.push(DATA.entities[k].label + '이(가) 완전자본잠식 상태예요.');
+        else if(pct !== null && pct > 0) flags.push(DATA.entities[k].label + '이(가) 부분 자본잠식 상태예요 (' + pct.toFixed(0) + '%).');
+      });
+    } else {
+      const pct = entityImpairPct(key);
+      if(pct !== null && pct >= 100) flags.push('완전자본잠식 상태예요.');
+      else if(pct !== null && pct > 0) flags.push('부분 자본잠식 상태예요 (' + pct.toFixed(0) + '%).');
+    }
+    if(ent.cash[0] > 0 && last(ent.cash) < ent.cash[0]*0.5) flags.push('현금잔액이 연초 대비 절반 이하로 줄었어요.');
+
+    const box = document.getElementById('alertBanner');
+    if(flags.length===0){ box.innerHTML=''; return; }
+    box.innerHTML = `<div class="alert-banner"><div class="title">⚠ 참고사항</div>
+      <ul>${flags.map(f=>`<li>${f}</li>`).join('')}</ul></div>`;
+  }
+
+  function renderKpisAndCharts(ent){
+    const pl = ent.pl, cash = ent.cash;
+    const drops = [];
+    for(let i=0;i<cash.length-1;i++){ const d = cash[i]-cash[i+1]; if(d>0) drops.push(d); }
+    const avgBurn = drops.length ? drops.reduce((a,b)=>a+b,0)/drops.length : 0;
+    const runwayMonths = avgBurn>0 ? (last(cash)/avgBurn) : null;
+
+    const capNow = last(ent.capital.capital), eqNow = last(ent.capital.equity);
+    let impairVal, impairSub, impairTone;
+    if(ent === DATA.entities.combined){
+      const ewImp = (last(DATA.entities.enkorwithus.capital.capital) - last(DATA.entities.enkorwithus.capital.equity)) / last(DATA.entities.enkorwithus.capital.capital) * 100;
+      const epImp = (last(DATA.entities.enkoplex.capital.capital) - last(DATA.entities.enkoplex.capital.equity)) / last(DATA.entities.enkoplex.capital.capital) * 100;
+      const anyImpaired = ewImp>0 || epImp>0;
+      impairVal = '-';
+      impairSub = '자본잠식은 법인별로 따로 판단해요';
+      impairTone = anyImpaired ? 'up' : 'down';
+    } else if(capNow<=0){ impairVal = '–'; impairSub = '자본금 데이터 없음'; impairTone = 'warn'; }
+    else {
+      const impairPct = (capNow-eqNow)/capNow*100;
+      impairVal = (impairPct>=0?'+':'') + impairPct.toFixed(0) + '<span class="unit">%</span>';
+      impairSub = impairPct >= 100 ? '완전자본잠식' : (impairPct > 0 ? '부분 자본잠식' : '잠식 없음');
+      impairTone = impairPct > 0 ? 'up' : 'down';
+    }
+
+    const cumRevenue = pl.revenue.reduce((a,b)=>a+b,0);
+    const cumOpinc = pl.opinc.reduce((a,b)=>a+b,0);
+
+    const kpiDefs = [
+      { lbl:'매출액 ('+DATA.months[DATA.months.length-1]+')', val: fmtM(last(pl.revenue))+'<span class="unit">백만원</span>', sub: ((last(pl.revenue)/prev(pl.revenue)-1)*100).toFixed(1)+'% 전월대비', extra: '누계 '+fmtM(cumRevenue)+'백만원', tone: last(pl.revenue)>=prev(pl.revenue)?'down':'up' },
+      { lbl:'영업이익(손실) ('+DATA.months[DATA.months.length-1]+')', val: fmtM(last(pl.opinc))+'<span class="unit">백만원</span>', sub: last(pl.opinc)<0 ? '적자 지속' : '흑자 전환', extra: '누계 '+fmtM(cumOpinc)+'백만원', tone: last(pl.opinc)<0?'up':'down' },
+      { lbl:'현금잔액 ('+DATA.months[DATA.months.length-1]+'말)', val: fmtM(last(cash))+'<span class="unit">백만원</span>', sub: ((last(cash)/prev(cash)-1)*100).toFixed(1)+'% 전월대비', tone: last(cash)>=prev(cash)?'down':'up',
+        info: '<b>계산 방식</b><br>보통예금 잔액이에요 (BS_'+(ent.label)+' 기준). 정기예·적금은 만기 전 중도해지 절차가 필요해서 "지금 당장 쓸 수 있는 돈"이 아니라고 보고 제외했어요. 외상매출금, 예치금 등 다른 자산도 포함하지 않아요.' },
+      { lbl:'추정 런웨이', val: (runwayMonths?runwayMonths.toFixed(1):'–')+'<span class="unit">개월</span>', sub: '최근 6개월 추세 기준', tone:'warn',
+        info: '<b>계산 방식</b><br>최근 6개월 구간에서 현금이 감소한 달들의 평균 감소액을 구하고, 이번 달 현금잔액을 그 평균 감소액으로 나눈 값이에요.<br><br>최근 추세를 기준으로 계산한 추정치라 실제 런웨이와 다를 수 있어요.' },
+      { lbl:'자본잠식률', val: impairVal, sub: impairSub, tone: impairTone,
+        info: '<b>계산 방식</b><br>자본잠식률(%) = (자본금 − 자본총계) ÷ 자본금 × 100<br><br>자본총계(회사가 실제로 보유한 순자산)가 자본금보다 적어지면 "자본잠식"이라고 해요. 자본총계가 0보다 작아지면(마이너스) 자본금을 100% 넘게 까먹은 "완전자본잠식" 상태예요.'
+          + (ent===DATA.entities.combined
+            ? '<br><br>자본잠식은 법인별로 판단하는 법적 개념이라, 두 법인 수치를 단순히 더한 연결기준 비율은 한쪽의 건전한 자본이 다른 쪽의 잠식을 가릴 수 있어 오해를 줄 수 있어요. 그래서 연결기준에서는 숫자 대신 법인별 확인이 필요한지만 표시해요.'
+            : '') },
+    ];
+    document.getElementById('kpiRow').innerHTML = kpiDefs.map((k,i) => `
+      <div class="kpi"><div class="lbl">${k.lbl}${k.info?`<span class="info-icon" data-info="${encodeURIComponent(k.info)}">i</span>`:''}</div>
+      <div class="val">${k.val}</div>
+      <div class="delta ${k.tone}">${k.sub}</div>
+      ${k.extra?`<div class="extra">${k.extra}</div>`:''}</div>`).join('');
+
+    document.querySelectorAll('.info-icon').forEach(icon => {
+      icon.onclick = (e) => {
+        e.stopPropagation();
+        const pop = document.getElementById('tooltipPop');
+        const isOpen = pop.style.display==='block' && pop.dataset.owner===icon.dataset.info;
+        if(isOpen){ pop.style.display='none'; return; }
+        pop.innerHTML = decodeURIComponent(icon.dataset.info);
+        pop.dataset.owner = icon.dataset.info;
+        const r = icon.getBoundingClientRect();
+        pop.style.display = 'block';
+        pop.style.left = Math.min(r.left, window.innerWidth-300) + 'px';
+        pop.style.top = (r.bottom + 8) + 'px';
+      };
+    });
+    document.addEventListener('click', () => { document.getElementById('tooltipPop').style.display='none'; });
+
+    const gridColor = 'rgba(20,30,50,.08)';
+    if(charts.pl) charts.pl.destroy();
+    charts.pl = new Chart(document.getElementById('chartPL'), {
+      type:'line', data:{ labels: DATA.months, datasets:[
+        {label:'매출액', data: pl.revenue.map(v=>v/1e6), borderColor:'#3D6A94', backgroundColor:'#3D6A94', tension:.25, pointRadius:3, borderWidth:2},
+        {label:'영업이익(손실)', data: pl.opinc.map(v=>v/1e6), borderColor:'#D6483F', backgroundColor:'#D6483F', tension:.25, pointRadius:3, borderWidth:2},
+      ]}, options:{ responsive:true, plugins:{legend:{position:'bottom', labels:{font:{size:10.5}, boxWidth:10, color:'#7C8AA0'}},
+        tooltip:{callbacks:{label:(c)=> c.dataset.label + ': ' + c.raw.toLocaleString('ko-KR',{maximumFractionDigits:1})}}},
+        scales:{ y:{ ticks:{ callback:v=>v.toLocaleString('ko-KR',{maximumFractionDigits:1}), font:{size:10} }, grid:{color:gridColor} },
+                 x:{ ticks:{font:{size:10}}, grid:{display:false} } } }
+    });
+    if(charts.cash) charts.cash.destroy();
+    charts.cash = new Chart(document.getElementById('chartCash'), {
+      type:'line', data:{ labels: DATA.months, datasets:[{ label:'현금잔액', data: cash.map(v=>v/1e6),
+        borderColor:'#B8790A', backgroundColor:'rgba(184,121,10,.10)', fill:true, tension:.2, pointRadius:4, pointBackgroundColor:'#B8790A', borderWidth:2 }]},
+      options:{ responsive:true, plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:(c)=> '현금잔액: ' + c.raw.toLocaleString('ko-KR',{maximumFractionDigits:1})}}},
+        scales:{ y:{ ticks:{ callback:v=>v.toLocaleString('ko-KR',{maximumFractionDigits:1}), font:{size:10} }, grid:{color:gridColor} },
+                 x:{ ticks:{font:{size:10}}, grid:{display:false} } } }
+    });
+  }
+
+  function mergeByVendor(items){
+    const groups = [];
+    const map = {};
+    items.forEach(it => {
+      const key = it.vendor ? (it.vendor + '::' + (it.entity||'')) : null;
+      if(key && map[key]){
+        const g = map[key];
+        if(!g.names.includes(it.name)) g.names.push(it.name);
+        it.vals.forEach((v,i)=> g.vals[i]+=v);
+      } else {
+        const g = { names:[it.name], vendor: it.vendor, entity: it.entity, category: it.category, vals:[...it.vals] };
+        groups.push(g);
+        if(key) map[key] = g;
+      }
+    });
+    return groups.map(g => {
+      const mom = g.vals[6]-g.vals[5];
+      const pct = g.vals[5] ? (mom/g.vals[5]*100) : (g.vals[6]?100:0);
+      return { category:g.category, name: g.names.join(' · '), vendor:g.vendor, entity:g.entity, vals:g.vals, mom, pct };
+    });
+  }
+
+  function flattenItems(ent){
+    const rows = [];
+    ent.categories.forEach(cat => {
+      const visible = cat.items.filter(it => !isAllZero(it.vals)).map(it => ({ category: cat.name, name: it.name, vendor: it.vendor, entity: it.entity, vals: it.vals }));
+      rows.push(...mergeByVendor(visible));
+    });
+    return rows;
+  }
+
+  function renderView(){
+    const ent = DATA.entities[currentView];
+    renderAlertBanner(ent, currentView);
+    renderKpisAndCharts(ent);
+
+    document.getElementById('donutTitle').textContent = '비중 — ' + ent.label;
+    const activeCats = ent.categories.filter(cat => !(isAllZero(cat.total) && cat.items.every(it=>isAllZero(it.vals))));
+    const labels = activeCats.map(c=>c.name);
+    const vals = activeCats.map(c=>last(c.total));
+    if(charts.donut) charts.donut.destroy();
+    charts.donut = new Chart(document.getElementById('chartDonut'), {
+      type:'doughnut', data:{ labels, datasets:[{ data: vals, backgroundColor: PALETTE, borderColor:'#FFFFFF', borderWidth:2 }]},
+      options:{ plugins:{ legend:{ display:false } }, cutout:'62%',
+        onHover:(evt,elements)=>{ evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
+        onClick:(evt,elements)=>{
+          if(!elements.length) return;
+          const cat = labels[elements[0].index];
+          activeCategory = cat; searchTerm = '';
+          renderTable();
+          document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active', x.textContent===cat));
+        }
+      }
+    });
+    const total = vals.reduce((a,b)=>a+b,0) || 1;
+    document.getElementById('legendBox').innerHTML = labels.map((l,i)=>`
+      <div><span class="name"><span class="sw" style="background:${PALETTE[i%PALETTE.length]}"></span>${l}</span>
+      <span class="pct">${(vals[i]/total*100).toFixed(1)}%</span></div>`).join('');
+
+    const chipBox = document.getElementById('chipBox');
+    chipBox.innerHTML = '';
+    ['전체', ...activeCats.map(c=>c.name)].forEach(c => {
+      const chip = document.createElement('button');
+      chip.className = 'chip' + (c===activeCategory?' active':'');
+      chip.textContent = c;
+      chip.onclick = () => { activeCategory = c; renderTable();
+        document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active')); chip.classList.add('active'); };
+      chipBox.appendChild(chip);
+    });
+    const search = document.createElement('input');
+    search.className = 'search'; search.placeholder = '거래처 / 항목 검색'; search.value = searchTerm;
+    search.oninput = (e)=>{ searchTerm = e.target.value; renderTable(); };
+    chipBox.appendChild(search);
+    renderTableHead(); renderTable();
+  }
+  function renderTableHead(){
+    const head = document.getElementById('tableHead');
+    const cols = [ {k:'vendor', label:'거래처'}, {k:'name', label:'항목'}, ...DATA.months.map((m,i)=>({k:'m'+i, label:m})), {k:'total', label:'누계', cls:'total-col'}, {k:'mom', label:'전월대비', cls:'summary-col'} ];
+    head.innerHTML = cols.map(c => `<th class="${c.cls||''} ${c.k!=='name'&&c.k!=='vendor'?'sortable':''}" data-key="${c.k}">${c.label}</th>`).join('');
+    head.querySelectorAll('th.sortable').forEach(th => {
+      th.onclick = () => {
+        const key = th.dataset.key;
+        sortState.dir = (sortState.key===key && sortState.dir==='desc') ? 'asc' : 'desc';
+        sortState.key = key; sortState.userSet = true; renderTable();
+      };
+    });
+  }
+  function bgTint(vals, i, skip){
+    if(skip) return 'transparent';
+    const v = vals[i];
+    if(v === 0){
+      if(i>0 && vals[i-1]>0) return 'rgba(52,199,160,0.28)';      // 이전 달이 +였다가 여기서 0이 됨
+      if(i<vals.length-1 && vals[i+1]>0) return 'rgba(255,92,92,0.28)'; // 여기는 0인데 다음 달에 +로 늘어남
+      return 'transparent';
+    }
+    if(i===0) return 'transparent';
+    const p = vals[i-1];
+    if(p===0) return 'transparent'; // 이 전이는 이전(0) 칸에서 이미 표시됨
+    const diff = v - p;
+    if(diff<=0 || Math.abs(diff)<=30000) return 'transparent';
+    return 'rgba(255,92,92,0.28)';
+  }
+  function sortRows(rows){
+    rows.sort((a,b) => {
+      let av, bv;
+      if(sortState.key.startsWith('m') && sortState.key!=='mom'){ const idx = parseInt(sortState.key.slice(1)); av=a.vals[idx]; bv=b.vals[idx]; }
+      else if(sortState.key==='mom'){ av=a.mom; bv=b.mom; }
+      else if(sortState.key==='pct'){ av=a.pct; bv=b.pct; }
+      else if(sortState.key==='total'){ av=a.vals.reduce((x,y)=>x+y,0); bv=b.vals.reduce((x,y)=>x+y,0); }
+      else { av=0; bv=0; }
+      return sortState.dir==='asc' ? av-bv : bv-av;
+    });
+    return rows;
+  }
+  function rowHtml(r, indent){
+    const skip = r.category === '지급임차료';
+    const monthCells = r.vals.map((v,i) => `<td style="background:${bgTint(r.vals,i,skip)}">${fmt(v)}</td>`).join('');
+    const momClass = r.mom>0 ? 'mom-up' : (r.mom<0 ? 'mom-down':'');
+    const arrow = r.mom>0 ? '▲' : (r.mom<0 ? '▼' : '–');
+    const entTag = r.entity ? `<span class="ent-tag ${r.entity==='엔코위더스'?'ew':'ep'}">${r.entity==='엔코위더스'?'EW':'EP'}</span>` : '';
+    const nameCell = indent ? `<td class="name-cell" style="padding-left:${indent}px">${r.name}</td>` : `<td class="name-cell">${r.name}</td>`;
+    return `<tr class="item-row">${indent ? `<td class="vendor" style="padding-left:${indent}px">${r.vendor||'–'}${entTag}</td>` : `<td class="vendor">${r.vendor||'–'}${entTag}</td>`}
+      ${nameCell}${monthCells}
+      <td class="total-col">${fmt(r.vals.reduce((a,b)=>a+b,0))}</td>
+      <td class="summary-col ${momClass}"><span class="amt">${r.mom>0?'+':''}${fmt(r.mom)}</span><span class="pct">${arrow} ${Math.abs(r.pct).toFixed(0)}%</span></td></tr>`;
+  }
+  function renderTable(){
+    const ent = DATA.entities[currentView];
+    const body = document.getElementById('tableBody');
+
+    if(activeCategory === '전체' && !searchTerm){
+      let html = '';
+      ent.categories.forEach(cat => {
+        const visibleItems = cat.items.filter(it => !isAllZero(it.vals));
+        if(visibleItems.length===0 && isAllZero(cat.total)) return;
+        const collapsed = !!collapsedGroups[cat.name];
+        const gmom = last(cat.total) - cat.total[5];
+        const gpct = cat.total[5] ? (gmom/cat.total[5]*100) : 0;
+        const gcells = cat.total.map((v,i) => `<td style="background:${bgTint(cat.total,i,cat.name==='지급임차료')}">${fmt(v)}</td>`).join('');
+        const gmomClass = gmom>0 ? 'mom-up' : (gmom<0 ? 'mom-down':'');
+        const garrow = gmom>0 ? '▲' : (gmom<0 ? '▼' : '–');
+        html += `<tr class="group-row" data-cat="${cat.name}">
+          <td class="cat-name-cell" colspan="2"><span class="chev">${collapsed?'▸':'▾'}</span>${cat.name}</td>
+          ${gcells}
+          <td class="total-col">${fmt(cat.total.reduce((a,b)=>a+b,0))}</td>
+          <td class="summary-col ${gmomClass}"><span class="amt">${gmom>0?'+':''}${fmt(gmom)}</span><span class="pct">${garrow} ${Math.abs(gpct).toFixed(0)}%</span></td></tr>`;
+        let items = mergeByVendor(visibleItems.map(it => ({ category: cat.name, name: it.name, vendor: it.vendor, entity: it.entity, vals: it.vals })));
+        if(sortState.userSet){
+          items = sortRows(items);
+        } else {
+          items.sort((a,b) => (a.entity||'').localeCompare(b.entity||''));
+        }
+        items.forEach(r => { html += rowHtml(r, 14).replace('class="item-row"', `class="item-row${collapsed?' collapsed':''}"`); });
+      });
+      body.innerHTML = html;
+      body.querySelectorAll('tr.group-row').forEach(tr => {
+        tr.onclick = () => {
+          const cat = tr.dataset.cat;
+          collapsedGroups[cat] = !collapsedGroups[cat];
+          renderTable();
+        };
+      });
+    } else {
+      let rows = flattenItems(ent);
+      if(activeCategory !== '전체') rows = rows.filter(r=>r.category===activeCategory);
+      if(searchTerm) rows = rows.filter(r => (r.name+ (r.vendor||'')).toLowerCase().includes(searchTerm.toLowerCase()));
+      rows = sortRows(rows);
+      body.innerHTML = rows.map(r => rowHtml(r, 0)).join('');
+    }
+  }
+  renderView();
+}
+
+async function connect(id, silent){
+  const errBox = document.getElementById('errBox');
+  errBox.style.display='none';
+  try{
+    DATA = await loadData(id);
+    localStorage.setItem('enkor_sheet_id_v2', id);
+    document.getElementById('overlay').style.display='none';
+    document.getElementById('content').style.display='block';
+    document.getElementById('liveDot').classList.remove('off');
+    document.getElementById('tsBox').textContent = '마지막 갱신: ' + new Date().toLocaleString('ko-KR');
+    renderAll();
+  }catch(e){
+    errBox.style.display='block';
+    errBox.textContent = '연결 실패: 시트 공유 설정(링크 뷰어 허용) 및 탭 이름(PL_통합/BS_Enkorwithus/BS_Enkoplex/고정판관비_Enkorwithus/고정판관비_enkoplex)을 확인해주세요. (' + e.message + ')';
+    document.getElementById('overlay').style.display='flex';
+  }
+}
+document.getElementById('connectBtn').onclick = () => {
+  const id = document.getElementById('sheetIdInput').value.trim();
+  if(id) connect(id, false);
+};
+document.getElementById('configBtn').onclick = () => {
+  document.getElementById('sheetIdInput').value = SHEET_ID;
+  document.getElementById('closeModal').style.display = DATA ? 'inline' : 'none';
+  document.getElementById('overlay').style.display='flex';
+};
+document.getElementById('closeModal').onclick = () => { document.getElementById('overlay').style.display='none'; };
+if(SHEET_ID){ document.getElementById('sheetIdInput').value = SHEET_ID; connect(SHEET_ID, true); }
+else { document.getElementById('overlay').style.display='flex'; }
+setInterval(()=>{ if(SHEET_ID && DATA) connect(SHEET_ID, true); }, 5*60*1000);
+</script>
+</body>
+</html>
