@@ -218,10 +218,23 @@ const trim = v => (v===null||v===undefined) ? '' : String(v).trim();
 const num = v => (typeof v === 'number') ? v : (parseFloat(String(v||'0').replace(/,/g,'')) || 0);
 const isAllZero = vals => vals.every(v => !v);
 
+// -------- 실제 데이터가 들어있는 달 수를 PL_통합의 매출액(통합)에서 자동 감지 --------
+function detectNumMonths(rows){
+  function findRow(label){ return rows.find(r => trim(r[1]) === label); }
+  const revRow = findRow('Ⅰ. 매출액');
+  if(!revRow) return 7;
+  let n = 0;
+  for(let m=0;m<12;m++){
+    const c = 4 + 3*m + 2; // 통합 컬럼
+    if(num(revRow[c]) !== 0) n = m+1;
+  }
+  return n || 7;
+}
+
 // -------- Parse PL_통합 (label in col B; each month has 3 cols: EW, EP, 통합 starting at idx4) --------
 // offset: 0=Enkorwithus, 1=Enkoplex, 2=연결기준(통합)
-function parsePL(rows, offset){
-  const monthCols = [0,1,2,3,4,5,6].map(m => 4 + 3*m + offset);
+function parsePL(rows, offset, numMonths){
+  const monthCols = Array.from({length:numMonths}, (_,m) => 4 + 3*m + offset);
   function findRow(label){ return rows.find(r => trim(r[1]) === label); }
   const revRow = findRow('Ⅰ. 매출액');
   const cogsRow = findRow('Ⅱ. 매출원가');
@@ -250,7 +263,7 @@ function patchEnkoplexJan(rows){
   return rows;
 }
 
-function parseOpex(rows){
+function parseOpex(rows, numMonths){
   const cats = [];
   let cur = null;
   for(const row of rows){
@@ -258,24 +271,24 @@ function parseOpex(rows){
     if(b === '계정별원장 rawdata' || b === '해당월') break;
     if(b){
       const name = b.startsWith('사회보험료') ? '사회보험료' : b;
-      cur = { name, total: row.slice(5,12).map(num), items: [] };
+      cur = { name, total: row.slice(5,5+numMonths).map(num), items: [] };
       cats.push(cur);
     } else if(c && cur){
       const vendor = trim(row[4]) || null;
-      cur.items.push({ name: c, vendor, vals: row.slice(5,12).map(num) });
+      cur.items.push({ name: c, vendor, vals: row.slice(5,5+numMonths).map(num) });
     }
   }
   return cats.filter(c => c.items.length > 0 || c.total.some(v=>v!==0));
 }
 
 // -------- Merge two entities' opex categories into a 연결기준 view --------
-function mergeCategories(catsA, labelA, catsB, labelB){
+function mergeCategories(catsA, labelA, catsB, labelB, numMonths){
   const order = [];
   const map = {};
   const tag = (cat, label) => cat.items.map(it => ({...it, entity: label}));
   [ {cats:catsA, label:labelA}, {cats:catsB, label:labelB} ].forEach(({cats,label}) => {
     cats.forEach(cat => {
-      if(!map[cat.name]){ map[cat.name] = { name: cat.name, total:[0,0,0,0,0,0,0], items:[] }; order.push(cat.name); }
+      if(!map[cat.name]){ map[cat.name] = { name: cat.name, total: Array(numMonths).fill(0), items: [] }; order.push(cat.name); }
       const m = map[cat.name];
       cat.total.forEach((v,i)=> m.total[i]+=v);
       m.items.push(...tag(cat, label));
@@ -291,16 +304,16 @@ function mergePL(a,b){
 }
 
 // -------- Parse BS sheet cash position: 보통예금만 (지금 당장 쓸 수 있는 실제 가용잔액, 정기예·적금 제외) --------
-function parseBSCash(rows){
-  const monthIdx = [0,1,2,3,4,5,6].map(m => 3 + m); // colD(idx3)=01월 ... idx9=07월
+function parseBSCash(rows, numMonths){
+  const monthIdx = Array.from({length:numMonths}, (_,m) => 3 + m); // colD(idx3)=01월 ...
   function findRow(label){ return rows.find(r => trim(r[1]) === label); }
   const dep = findRow('보통예금');
   return monthIdx.map(c => dep ? num(dep[c]) : 0);
 }
 
 // -------- Parse BS sheet capital position: 자본금(Ⅰ.자본금) and 자본총계 for 자본잠식률 --------
-function parseBSCapital(rows){
-  const monthIdx = [0,1,2,3,4,5,6].map(m => 3 + m);
+function parseBSCapital(rows, numMonths){
+  const monthIdx = Array.from({length:numMonths}, (_,m) => 3 + m);
   function findRow(label){ return rows.find(r => trim(r[1]) === label); }
   const capRow = findRow('Ⅰ. 자본금');
   const equityRow = findRow('자본총계');
@@ -316,20 +329,21 @@ async function loadData(id){
     fetchTab(id, '고정판관비_Enkorwithus'), fetchTab(id, '고정판관비_enkoplex'),
     fetchTab(id, 'BS_Enkorwithus'), fetchTab(id, 'BS_Enkoplex')
   ]);
-  const ewPL = parsePL(plRows, 0);
-  const epPL = parsePL(plRows, 1);
-  const ewCats = parseOpex(ewRows);
-  const epCats = parseOpex(patchEnkoplexJan(epRows));
-  const ewCash = parseBSCash(bsEwRows);
-  const epCash = parseBSCash(bsEpRows);
-  const ewCap = parseBSCapital(bsEwRows);
-  const epCap = parseBSCapital(bsEpRows);
+  const numMonths = detectNumMonths(plRows);
+  const ewPL = parsePL(plRows, 0, numMonths);
+  const epPL = parsePL(plRows, 1, numMonths);
+  const ewCats = parseOpex(ewRows, numMonths);
+  const epCats = parseOpex(patchEnkoplexJan(epRows), numMonths);
+  const ewCash = parseBSCash(bsEwRows, numMonths);
+  const epCash = parseBSCash(bsEpRows, numMonths);
+  const ewCap = parseBSCapital(bsEwRows, numMonths);
+  const epCap = parseBSCapital(bsEpRows, numMonths);
   return {
-    months: ['1월','2월','3월','4월','5월','6월','7월'],
+    months: Array.from({length:numMonths}, (_,i) => (i+1)+'월'),
     entities: {
       enkorwithus: { label:'엔코위더스', categories: ewCats, cash: ewCash, pl: ewPL, capital: ewCap },
       enkoplex: { label:'엔코플렉스', categories: epCats, cash: epCash, pl: epPL, capital: epCap },
-      combined: { label:'연결기준', categories: mergeCategories(ewCats, '엔코위더스', epCats, '엔코플렉스'), cash: sumArr(ewCash, epCash), pl: mergePL(ewPL, epPL),
+      combined: { label:'연결기준', categories: mergeCategories(ewCats, '엔코위더스', epCats, '엔코플렉스', numMonths), cash: sumArr(ewCash, epCash), pl: mergePL(ewPL, epPL),
         capital: { capital: sumArr(ewCap.capital, epCap.capital), equity: sumArr(ewCap.equity, epCap.equity) } },
     }
   };
@@ -490,8 +504,8 @@ function renderAll(){
       }
     });
     return groups.map(g => {
-      const mom = g.vals[6]-g.vals[5];
-      const pct = g.vals[5] ? (mom/g.vals[5]*100) : (g.vals[6]?100:0);
+      const mom = g.vals[g.vals.length-1]-g.vals[g.vals.length-2];
+      const pct = g.vals[g.vals.length-2] ? (mom/g.vals[g.vals.length-2]*100) : (g.vals[g.vals.length-1]?100:0);
       return { category:g.category, name: g.names.join(' · '), vendor:g.vendor, entity:g.entity, vals:g.vals, mom, pct };
     });
   }
@@ -604,8 +618,8 @@ function renderAll(){
         const visibleItems = cat.items.filter(it => !isAllZero(it.vals));
         if(visibleItems.length===0 && isAllZero(cat.total)) return;
         const collapsed = !!collapsedGroups[cat.name];
-        const gmom = last(cat.total) - cat.total[5];
-        const gpct = cat.total[5] ? (gmom/cat.total[5]*100) : 0;
+        const gmom = last(cat.total) - cat.total[cat.total.length-2];
+        const gpct = cat.total[cat.total.length-2] ? (gmom/cat.total[cat.total.length-2]*100) : 0;
         const gcells = cat.total.map((v) => `<td>${fmt(v)}</td>`).join('');
         const gmomClass = gmom>0 ? 'mom-up' : (gmom<0 ? 'mom-down':'');
         const garrow = gmom>0 ? '▲' : (gmom<0 ? '▼' : '–');
